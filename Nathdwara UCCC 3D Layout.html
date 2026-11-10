@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nathdwara UCCC 3D Layout</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* Layout: full-bleed 3D scene; title + view controls float top-left; equipment / rack panel docked right (bottom sheet on phones). Single dark theme by choice: it is a control room. */
+  --bg:#0b1016; --panel:#111821; --panel-2:#17202b; --line:#253140; --ink:#e7edf3; --muted:#93a1b0; --accent:#f29b38;
+  --font-display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:14px;overflow:hidden}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app{position:relative;height:100%}
+#stage{position:absolute;inset:0;right:400px}
+#stage canvas{display:block;touch-action:none;cursor:grab}
+#stage canvas:active{cursor:grabbing}
+#css{position:absolute;inset:0;pointer-events:none}
+
+/* HUD */
+.hud{position:absolute;top:16px;left:16px;max-width:min(560px,calc(100% - 432px));display:grid;gap:10px;z-index:3}
+.titlecard{background:rgba(11,16,22,.86);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:6px;padding:12px 16px}
+.eyebrow{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+h1{font-family:var(--font-display);font-weight:700;font-size:24px;line-height:1.15;margin:3px 0 4px;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px}
+.bar{display:flex;flex-wrap:wrap;gap:6px}
+.btn{background:rgba(17,24,33,.9);border:1px solid var(--line);border-radius:5px;padding:7px 12px;cursor:pointer;font-family:var(--font-display);font-weight:600;font-size:14px;letter-spacing:.02em}
+.btn:hover{border-color:#3a4a5c}
+.btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#1a1006}
+.tog{display:inline-flex;align-items:center;gap:6px;background:rgba(17,24,33,.9);border:1px solid var(--line);border-radius:5px;padding:6px 10px;font-size:13px;cursor:pointer}
+.tog input{accent-color:var(--accent);margin:0}
+.hint{position:absolute;left:50%;bottom:14px;transform:translateX(calc(-50% - 200px));background:rgba(11,16,22,.8);border:1px solid var(--line);border-radius:20px;padding:6px 14px;font-size:12.5px;color:var(--muted);white-space:nowrap;z-index:2}
+.legend{position:absolute;left:16px;bottom:16px;background:rgba(11,16,22,.86);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:grid;gap:5px;font-size:12.5px;z-index:2}
+.legend b{font-family:var(--font-display);font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.sw{display:flex;align-items:center;gap:8px}
+.sw i{width:12px;height:12px;border-radius:2px;background:var(--c)}
+
+/* labels in scene */
+.lbl{font-family:var(--font-display);color:var(--ink);white-space:nowrap;background:rgba(9,14,20,.84);border:1px solid rgba(255,255,255,.12);border-left:3px solid var(--accent);padding:3px 8px;border-radius:3px;font-size:14px;font-weight:600;line-height:1.2}
+.lbl small{display:block;font-family:var(--font-body);font-weight:400;font-size:11.5px;color:var(--muted)}
+.lbl.zone{font-size:17px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;border-left-width:4px}
+.lbl.rack{font-size:13px;border-left:0;border-top:3px solid var(--c);padding:2px 7px;text-align:center}
+.lbl.floor{background:none;border:0;color:#5f6e7d;letter-spacing:.2em;text-transform:uppercase;font-size:12px}
+.hide-labels .lbl:not(.rack){display:none}
+
+/* tooltip */
+#tip{position:absolute;z-index:5;pointer-events:none;background:#0d141c;border:1px solid var(--line);border-left:3px solid var(--c,var(--accent));border-radius:4px;padding:7px 10px;font-size:13px;display:none;max-width:280px}
+#tip b{display:block;font-family:var(--font-display);font-size:14.5px;font-weight:600}
+#tip span{color:var(--muted);font-size:12px;font-family:var(--font-mono)}
+
+/* panel */
+aside{position:absolute;top:0;right:0;bottom:0;width:400px;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;z-index:4}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tab{flex:1;background:none;border:0;border-bottom:3px solid transparent;padding:13px 10px 10px;cursor:pointer;font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--muted);letter-spacing:.02em}
+.tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.pane{overflow:auto;padding:16px;display:none;flex:1}
+.pane.on{display:grid;align-content:start;gap:16px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stat{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:9px 10px}
+.stat b{display:block;font-family:var(--font-display);font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.stat span{font-size:11.5px;color:var(--muted)}
+h2{font-family:var(--font-display);font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;font-weight:500;color:var(--muted);font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;padding:0 6px 6px;border-bottom:1px solid var(--line)}
+td{padding:7px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+td.n{font-family:var(--font-mono);color:var(--muted);font-size:12px;width:24px}
+td.q{font-family:var(--font-mono);text-align:right;width:30px;font-variant-numeric:tabular-nums}
+tr.item{cursor:pointer}
+tr.item:hover td{background:#141e29}
+tr.item[aria-selected="true"] td{background:#1c2733}
+tr.item[aria-selected="true"] td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.chip{font-family:var(--font-mono);font-size:10.5px;background:#0d141c;border:1px solid var(--line);border-radius:3px;padding:1px 5px;color:#b8c4d0}
+.dot{display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--c);margin-right:6px;vertical-align:1px}
+.notes{margin:0;padding-left:18px;display:grid;gap:6px;color:#c9d3dc;font-size:13px;line-height:1.45;max-width:65ch}
+.rackpick{display:flex;flex-wrap:wrap;gap:5px}
+.rackpick .btn{padding:5px 9px;font-size:13px}
+.rhead{display:grid;gap:3px}
+.rhead h3{margin:0;font-family:var(--font-display);font-size:20px;font-weight:700}
+.rhead p{margin:0;color:var(--muted);font-size:12.5px}
+.elev{display:grid;grid-template-columns:28px 1fr;grid-template-rows:repeat(42,18px);column-gap:6px;background:#0c1218;border:1px solid var(--line);border-radius:5px;padding:6px 8px 6px 4px}
+.elev .u{grid-column:1;font-family:var(--font-mono);font-size:10px;color:#56657a;text-align:right;line-height:18px;font-variant-numeric:tabular-nums}
+.elev .slot{grid-column:2;border-bottom:1px dashed #1a232e}
+.blk{grid-column:2;z-index:1;margin:1px 0;background:#1a222c;border:1px solid #2a3542;border-left:4px solid var(--c);border-radius:2px;display:flex;align-items:center;justify-content:space-between;gap:6px;padding:0 7px;font-family:var(--font-display);font-weight:600;font-size:12.5px;text-align:left;cursor:pointer;min-width:0}
+.blk span{font-family:var(--font-mono);font-weight:400;font-size:10.5px;color:var(--muted);white-space:nowrap}
+.blk.pas{background:#141a21;color:#8796a6;font-weight:500;font-size:11.5px}
+.blk.on{background:#24303d;border-color:var(--c)}
+.blk:hover{border-color:var(--c)}
+.empty{grid-column:2;grid-row:1/-1;display:grid;place-items:center;color:#56657a;font-family:var(--font-display);font-size:15px;letter-spacing:.1em;text-transform:uppercase;z-index:1}
+.foot{font-size:12px;color:var(--muted);line-height:1.45}
+#fallback{position:absolute;inset:0;right:400px;display:grid;place-items:center;color:var(--muted);text-align:center;padding:24px}
+
+@media (max-width:900px){
+  #stage,#fallback{right:0;bottom:46%}
+  aside{top:auto;height:46%;width:100%;border-left:0;border-top:1px solid var(--line)}
+  .hud{max-width:calc(100% - 32px);top:10px;left:10px;right:10px}
+  h1{font-size:19px}
+  .titlecard{padding:9px 12px}
+  .titlecard .sub{display:none}
+  .legend,.hint{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+</head>
+<body>
+<div id="app">
+  <div id="fallback">Loading the 3D model…</div>
+  <div id="stage"><div id="css"></div></div>
+
+  <div class="hud">
+    <div class="titlecard">
+      <div class="eyebrow">Shri Nathji Temple, Nathdwara · VL Access India</div>
+      <h1>UCCC Control Room &amp; Server Room</h1>
+      <div class="sub">Indicative 3D layout · final layout subject to site survey and heat-load calculation</div>
+    </div>
+    <div class="bar" role="group" aria-label="Camera views">
+      <button class="btn" data-view="overview" aria-pressed="true">Overview</button>
+      <button class="btn" data-view="control" aria-pressed="false">Control room</button>
+      <button class="btn" data-view="server" aria-pressed="false">Server room</button>
+      <button class="btn" data-view="racks" aria-pressed="false">Rack fronts</button>
+    </div>
+    <div class="bar">
+      <label class="tog" for="optLabels"><input type="checkbox" id="optLabels" checked> Labels</label>
+      <label class="tog" for="optDoors"><input type="checkbox" id="optDoors"> Rack front doors</label>
+    </div>
+  </div>
+
+  <div class="legend" id="legend"><b>Equipment type</b></div>
+  <div class="hint">Drag to rotate · scroll or pinch to zoom · right-drag to pan · click a rack to see its layout</div>
+  <div id="tip"></div>
+
+  <aside>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabEq" aria-selected="true" aria-controls="paneEq">Equipment</button>
+      <button class="tab" role="tab" id="tabRack" aria-selected="false" aria-controls="paneRack">Rack layout</button>
+    </div>
+    <section class="pane on" id="paneEq" role="tabpanel" aria-labelledby="tabEq">
+      <div class="stats" id="stats"></div>
+      <div>
+        <h2>Equipment schedule</h2>
+        <table>
+          <thead><tr><th>Sl</th><th>Purpose · placed in</th><th style="text-align:right">Qty</th></tr></thead>
+          <tbody id="items"></tbody>
+        </table>
+      </div>
+      <div>
+        <h2>Layout principles</h2>
+        <ul class="notes">
+          <li>Each primary server and its failover partner sit in different racks (R2 and R3), so one rack fault cannot take down both.</li>
+          <li>Storage enclosures are at the bottom of R5 for weight; GPU servers are grouped in R4 for cooling.</li>
+          <li>Firewalls, core and distribution switches are consolidated in R1 at the head of the row.</li>
+          <li>R6 to R8 are kept free for future cameras, sensors and storage.</li>
+          <li>Rack fronts face the cold aisle with perforated tiles; UPS and battery banks are on the rear wall; precision AC runs N+1.</li>
+        </ul>
+      </div>
+      <p class="foot">Device heights (2U servers, 4U LiDAR server, 4U storage shelves) are assumed for layout; confirm against final OEM models. Screen content on the video wall is illustrative.</p>
+    </section>
+    <section class="pane" id="paneRack" role="tabpanel" aria-labelledby="tabRack">
+      <div class="rackpick" id="rackpick" role="group" aria-label="Choose rack"></div>
+      <div class="rhead" id="rhead"></div>
+      <div class="elev" id="elev"></div>
+    </section>
+  </aside>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const U = 0.04445;
+const COND = '"IBM Plex Sans Condensed","Arial Narrow",sans-serif';
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const CAT = {
+  db:{name:'Database', color:'#4f9dff'},
+  mgmt:{name:'Management & applications', color:'#3ccf91'},
+  rec:{name:'Recording', color:'#a78bfa'},
+  ai:{name:'AI / GPU analytics', color:'#ff6b8a'},
+  sto:{name:'SAN storage', color:'#ffd166'},
+  net:{name:'Core & distribution switches', color:'#5cc8e0'},
+  fw:{name:'Next-gen firewall (HA)', color:'#ff7a45'},
+  pas:{name:'Passive / cable management', color:'#7b8794'}
+};
+const S = (id,u,h,kind,cat,label,tag)=>({id,u,h,kind,cat,label,tag});
+const RACKS = [
+ {id:'R1', name:'Network & Security', devices:[
+  S('pp',42,1,'patch','pas','Patch Panel 48-Port Cat6A','1U'),
+  S('cm1',41,1,'cm','pas','Cable manager','1U'),
+  S('liu1',40,1,'liu','pas','Fibre LIU 48-Port · 1','1U'),
+  S('liu2',39,1,'liu','pas','Fibre LIU 48-Port · 2','1U'),
+  S('cm2',38,1,'cm','pas','Cable manager','1U'),
+  S('fw1',36,2,'fw','fw','NGFW-1 · Active','2U · HA pair'),
+  S('fw2',33,2,'fw','fw','NGFW-2 · Standby','2U · HA pair'),
+  S('core1',31,1,'switch','net','L3 Core Switch-1 · Primary','1U · 24-port'),
+  S('cm3',30,1,'cm','pas','Cable manager','1U'),
+  S('core2',29,1,'switch','net','L3 Core Switch-2 · Failover','1U · 24-port'),
+  S('cm4',28,1,'cm','pas','Cable manager','1U'),
+  S('ds1',27,1,'switch','net','L3 Distribution Switch-1','1U · 24-port'),
+  S('ds2',26,1,'switch','net','L3 Distribution Switch-2','1U · 24-port'),
+  S('cm5',25,1,'cm','pas','Cable manager','1U'),
+  S('ds3',24,1,'switch','net','L3 Distribution Switch-3','1U · 24-port'),
+  S('ds4',23,1,'switch','net','L3 Distribution Switch-4','1U · 24-port'),
+  S('cm6',22,1,'cm','pas','Cable manager','1U')]},
+ {id:'R2', name:'Application · Primary', devices:[
+  S('rc1',3,2,'server','rec','Recording Server-1','2U'),
+  S('rc2',6,2,'server','rec','Recording Server-2','2U'),
+  S('rc3',9,2,'server','rec','Recording Server-3','2U'),
+  S('alpr',12,2,'server','mgmt','ALPR + SIP PA + Access Control','2U'),
+  S('nms',15,2,'server','mgmt','NMS + NTP Server','2U'),
+  S('mg1',18,2,'server','mgmt','Management Server · Primary','2U'),
+  S('db1',21,2,'server','db','Database-1 · Always On Primary','2U')]},
+ {id:'R3', name:'Application · Failover', devices:[
+  S('rc4',3,2,'server','rec','Recording Server-4','2U'),
+  S('rc5',6,2,'server','rec','Recording Server-5','2U'),
+  S('rc6',9,2,'server','rec','Recording Server-6','2U'),
+  S('rcf',12,2,'server','rec','Failover Recording Server','2U · N+1'),
+  S('tpi',15,2,'server','mgmt','3rd-Party Integration Server','2U'),
+  S('mgf',18,2,'server','mgmt','Management Server · Failover','2U'),
+  S('db2',21,2,'server','db','Database-2 · Always On Secondary','2U')]},
+ {id:'R4', name:'AI Analytics · GPU', devices:[
+  S('lidar',3,4,'gpu4','ai','LiDAR Crowd Monitoring Server','4U · GPU'),
+  S('frs1',8,2,'gpu','ai','GPU FRS Server-1 · 50 streams','2U · GPU'),
+  S('frs2',11,2,'gpu','ai','GPU FRS Server-2 · 50 streams','2U · GPU'),
+  S('frs3',14,2,'gpu','ai','GPU FRS Server-3 · 50 streams','2U · GPU')]},
+ {id:'R5', name:'SAN Storage', devices:[
+  S('jb1',3,4,'jbod','sto','Expansion Enclosure-1 · 84 × 18 TB','4U · 84-bay'),
+  S('jb2',7,4,'jbod','sto','Expansion Enclosure-2 · 82 × 18 TB','4U · 84-bay'),
+  S('sanc',12,2,'sanc','sto','SAN Controller · Dual Active-Active','2U')]},
+ {id:'R6', name:'Reserved for expansion', reserved:true, devices:[]},
+ {id:'R7', name:'Reserved for expansion', reserved:true, devices:[]},
+ {id:'R8', name:'Reserved for expansion', reserved:true, devices:[]},
+];
+const RACK_BY_ID = Object.fromEntries(RACKS.map(r=>[r.id,r]));
+const RACK_COLOR = {R1:CAT.fw.color,R2:CAT.mgmt.color,R3:CAT.mgmt.color,R4:CAT.ai.color,R5:CAT.sto.color,R6:'#5b6672',R7:'#5b6672',R8:'#5b6672'};
+const RACK_X = id => 2.0 + RACKS.findIndex(r=>r.id===id)*0.8;
+const DEPTH = {server:.74, gpu:.80, gpu4:.82, jbod:.98, sanc:.70, switch:.42, fw:.55, patch:.12, liu:.30, cm:.10};
+
+const ITEMS = [
+ {sl:1, purpose:'Database with Always On', qty:2, ids:['db1','db2']},
+ {sl:2, purpose:'Management', qty:1, ids:['mg1']},
+ {sl:3, purpose:'Recording', qty:6, ids:['rc1','rc2','rc3','rc4','rc5','rc6']},
+ {sl:4, purpose:'Failover Recording', qty:1, ids:['rcf']},
+ {sl:5, purpose:'Failover Management', qty:1, ids:['mgf']},
+ {sl:6, purpose:'ALPR + SIP PA + Access Control', qty:1, ids:['alpr']},
+ {sl:7, purpose:'NMS + NTP', qty:1, ids:['nms']},
+ {sl:8, purpose:'3rd Party Application Integration', qty:1, ids:['tpi']},
+ {sl:9, purpose:'GPU Based Server (50 FRS)', qty:3, ids:['frs1','frs2','frs3']},
+ {sl:10, purpose:'LiDAR Crowd Monitoring Application Server', qty:1, ids:['lidar']},
+ {sl:11, purpose:'SAN Storage, 3 PB HDD (18 TB × 166)', qty:1, ids:['sanc','jb1','jb2']},
+ {sl:12, purpose:'24-Port L3 Core Switch', qty:2, ids:['core1','core2']},
+ {sl:13, purpose:'24-Port L3 Distribution Switch', qty:4, ids:['ds1','ds2','ds3','ds4']},
+ {sl:14, purpose:'Next Generation Firewall with HA', qty:2, ids:['fw1','fw2']},
+ {sl:15, purpose:'42U Data Centre Rack, 800 W × 1200 D mm', qty:8, ids:[], racks:RACKS.map(r=>r.id)},
+];
+
+// ---------- helpers ----------
+function rng(seed){return ()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function cnv(w,h){const c=document.createElement('canvas');c.width=w;c.height=h;return [c,c.getContext('2d')]}
+let maxAniso=4;
+function tex(c,rep){const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=maxAniso;if(rep){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep[0],rep[1])}return t}
+function txt(g,s,x,y,size,color,weight=600,align='left'){g.font=`${weight} ${size}px ${COND}`;g.fillStyle=color;g.textAlign=align;g.textBaseline='middle';g.fillText(s,x,y)}
+function rrect(g,x,y,w,h,r){g.beginPath();if(g.roundRect)g.roundRect(x,y,w,h,r);else g.rect(x,y,w,h);g.fill()}
+const metal = c=>new THREE.MeshStandardMaterial({color:c,metalness:.55,roughness:.45});
+const matte = c=>new THREE.MeshStandardMaterial({color:c,metalness:0,roughness:.9});
+function box(w,h,d,mat,x=0,y=0,z=0,parent){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;(parent||scene).add(m);return m}
+function label(html,cls,pos,style){const d=document.createElement('div');d.className='lbl '+(cls||'');d.innerHTML=html;if(style)d.style.cssText=style;const o=new CSS2DObject(d);o.position.copy(pos);scene.add(o);return o}
+
+// ---------- device front panels ----------
+function frontTexture(dev){
+  const Wp=1024, Hp=Math.round(94*dev.h); const [c,g]=cnv(Wp,Hp); const col=CAT[dev.cat].color;
+  const gr=g.createLinearGradient(0,0,0,Hp);gr.addColorStop(0,'#28313b');gr.addColorStop(1,'#181e25');g.fillStyle=gr;g.fillRect(0,0,Wp,Hp);
+  g.fillStyle='#323b45';g.fillRect(0,0,34,Hp);g.fillRect(Wp-34,0,34,Hp);
+  g.fillStyle='#0d1115';for(let i=0;i<dev.h;i++){[17,Wp-17].forEach(x=>{g.beginPath();g.arc(x,i*94+47,6,0,7);g.fill()})}
+  const k=dev.kind;
+  const labelBlock=x=>{txt(g,dev.label,x,Hp/2-(dev.h>1?16:0),dev.h>1?34:30,'#eef3f7',600);if(dev.h>1)txt(g,dev.tag,x,Hp/2+22,22,'#9aa8b6',500)};
+  if(k==='server'){
+    g.fillStyle=col;g.fillRect(40,6,10,Hp-12);
+    for(let r=0;r<2;r++)for(let i=0;i<12;i++){const x=62+i*38,y=10+r*(Hp/2-4);g.fillStyle='#10151a';g.fillRect(x,y,32,Hp/2-16);g.fillStyle='#1f262d';g.fillRect(x+3,y+3,26,8);g.fillStyle=i%5===3?'#38bdf8':'#34d399';g.fillRect(x+12,y+Hp/2-30,8,5)}
+    labelBlock(540);g.fillStyle=col;g.beginPath();g.arc(Wp-70,Hp/2,11,0,7);g.fill();
+  } else if(k==='gpu'||k==='gpu4'){
+    g.fillStyle=col;g.fillRect(40,6,10,Hp-12);
+    g.fillStyle='#0c1014';const s=k==='gpu4'?18:14;for(let y=12;y<Hp-10;y+=s)for(let x=64+((y/s)%2)*s/2;x<500;x+=s){g.beginPath();g.arc(x,y,s*.36,0,7);g.fill()}
+    labelBlock(540);txt(g,'GPU',Wp-120,Hp/2,30,col,700);
+  } else if(k==='jbod'){
+    g.fillStyle=col;g.fillRect(40,0,Wp-80,8);
+    txt(g,dev.label,56,32,30,'#eef3f7',600);txt(g,'4U · 84-bay',Wp-56,32,22,'#9aa8b6',500,'right');
+    const empty=dev.id==='jb2'?2:0;let n=0;
+    for(let r=0;r<4;r++)for(let i=0;i<21;i++){n++;const x=52+i*44.5,y=62+r*76;g.fillStyle='#0f1418';g.fillRect(x,y,38,68);
+      if(n>84-empty){g.fillStyle='#252c33';g.fillRect(x+4,y+4,30,60)}else{g.fillStyle='#262e36';g.fillRect(x+4,y+4,30,10);g.fillStyle=(n*7)%13===0?'#38bdf8':'#34d399';g.fillRect(x+15,y+54,8,5)}}
+  } else if(k==='sanc'){
+    g.fillStyle=col;g.fillRect(40,6,10,Hp-12);
+    for(let i=0;i<24;i++){const x=62+i*20;g.fillStyle='#10151a';g.fillRect(x,12,16,Hp-24);g.fillStyle='#34d399';g.fillRect(x+5,Hp-26,6,4)}
+    labelBlock(560);
+  } else if(k==='switch'){
+    g.fillStyle=col;g.fillRect(40,6,8,Hp-12);txt(g,dev.label,60,Hp/2,27,'#eef3f7',600);
+    for(let r=0;r<2;r++)for(let i=0;i<12;i++){const x=470+i*34+Math.floor(i/6)*14,y=8+r*42;g.fillStyle='#0b0f13';g.fillRect(x,y+8,28,30);g.fillStyle=(i+r)%4?'#34d399':'#f5b942';g.fillRect(x+2,y+2,7,4)}
+    for(let i=0;i<4;i++){g.fillStyle='#0b0f13';g.fillRect(Wp-200+i*40,26,32,40);g.fillStyle='#38bdf8';g.fillRect(Wp-196+i*40,18,8,4)}
+  } else if(k==='fw'){
+    g.fillStyle=col;g.fillRect(40,6,10,Hp-12);labelBlock(64);
+    g.fillStyle='#0a1a12';g.fillRect(470,30,120,50);txt(g,dev.id==='fw1'?'ACTIVE':'STANDBY',530,55,22,dev.id==='fw1'?'#34d399':'#f5b942',700,'center');
+    for(let i=0;i<8;i++){g.fillStyle='#0b0f13';g.fillRect(620+i*34,50,28,30)}for(let i=0;i<4;i++){g.fillStyle='#0b0f13';g.fillRect(620+i*40,110,32,40)}
+  } else if(k==='patch'){
+    for(let r=0;r<2;r++)for(let i=0;i<24;i++){const x=60+i*38+Math.floor(i/6)*8,y=12+r*38;g.fillStyle='#0b0f13';g.fillRect(x,y,30,30)}
+  } else if(k==='liu'){
+    for(let r=0;r<2;r++)for(let i=0;i<24;i++){const x=70+i*37,y=14+r*36;g.fillStyle='#2f86c8';g.fillRect(x,y,26,26);g.fillStyle='#0c2135';g.fillRect(x+5,y+8,7,10);g.fillRect(x+14,y+8,7,10)}
+  } else if(k==='cm'){
+    g.fillStyle='#0c1014';g.fillRect(60,30,Wp-120,34);g.strokeStyle='#3a434d';g.lineWidth=5;for(let i=0;i<6;i++){g.beginPath();g.arc(140+i*150,47,22,Math.PI,0);g.stroke()}
+  }
+  return tex(c);
+}
+function blankCanvas(){const [c,g]=cnv(512,48);g.fillStyle='#1b2128';g.fillRect(0,0,512,48);g.fillStyle='#232a32';g.fillRect(0,0,512,2);g.fillStyle='#14191e';for(let i=0;i<10;i++)g.fillRect(120+i*28,18,16,12);return c}
+function doorCanvas(){const [c,g]=cnv(256,256);g.fillStyle='rgba(22,28,34,0.93)';g.fillRect(0,0,256,256);g.globalCompositeOperation='destination-out';for(let y=4;y<256;y+=8)for(let x=4+((y/8)%2)*4;x<256;x+=8){g.beginPath();g.arc(x,y,2.6,0,7);g.fill()}return c}
+
+// ---------- screens ----------
+const PLACES=['Main Gate','Darshan Hall','Goshala','Parking P1','Exit Gate 2','Staircase B','Lift Lobby','Prasad Counter','Corridor 3','Shoe Stand','Queue Lane A','East Courtyard','Parking P2','North Gate','Hall 2 Entry','Office Block'];
+function camTile(g,x,y,w,h,r,name){const hue=[210,30,190,45,160][Math.floor(r()*5)];const gr=g.createLinearGradient(0,y,0,y+h);gr.addColorStop(0,`hsl(${hue},14%,${28+r()*10}%)`);gr.addColorStop(1,`hsl(${hue},10%,${14+r()*6}%)`);g.fillStyle=gr;g.fillRect(x,y,w,h);
+ g.fillStyle=`hsla(${hue},10%,45%,.35)`;g.beginPath();g.moveTo(x,y+h);g.lineTo(x+w*.35,y+h*.45);g.lineTo(x+w*.65,y+h*.45);g.lineTo(x+w,y+h);g.fill();
+ const n=4+Math.floor(r()*14);for(let i=0;i<n;i++){const px=x+w*(.1+r()*.8),py=y+h*(.55+r()*.38),s=h*(.05+r()*.06);g.fillStyle=`hsla(${r()*360},25%,${20+r()*25}%,.95)`;rrect(g,px-s*.35,py-s,s*.7,s*1.6,s*.2);g.beginPath();g.arc(px,py-s*1.2,s*.28,0,7);g.fill()}
+ g.fillStyle='rgba(0,0,0,.6)';g.fillRect(x,y,w,Math.max(16,h*.11));txt(g,name,x+6,y+Math.max(8,h*.055),Math.max(11,h*.075),'#e8eef4',600);g.fillStyle='#ef4444';g.beginPath();g.arc(x+w-10,y+Math.max(8,h*.055),Math.max(3,h*.025),0,7);g.fill();
+ g.strokeStyle='#05080b';g.lineWidth=3;g.strokeRect(x,y,w,h)}
+function screenCanvas(kind,seed,Wc=1024,Hc=576){const [c,g]=cnv(Wc,Hc);const r=rng(seed);g.fillStyle='#071019';g.fillRect(0,0,Wc,Hc);
+ const s=Wc/1024;const header=t=>{g.fillStyle='#0d1b28';g.fillRect(0,0,Wc,48*s);txt(g,t,18*s,25*s,26*s,'#e8eef4',600);txt(g,'LIVE',Wc-20*s,25*s,22*s,'#34d399',700,'right')};
+ if(kind.startsWith('grid')){const n=+kind.slice(4);const w=Wc/n,h=Hc/n;for(let i=0;i<n;i++)for(let j=0;j<n;j++)camTile(g,j*w,i*h,w,h,r,`CAM-${String(100+Math.floor(r()*400))} · ${PLACES[Math.floor(r()*PLACES.length)]}`)}
+ else{g.save();g.scale(s,s);const W1=1024,H1=576;
+ if(kind==='gis'){header('Temple precinct · GIS zone status');g.strokeStyle='#1d3346';g.lineWidth=14;for(let i=0;i<9;i++){g.beginPath();g.moveTo(r()*W1,48);g.bezierCurveTo(r()*W1,r()*H1,r()*W1,r()*H1,r()*W1,H1);g.stroke()}
+   [['#34d399',.18,.3],['#f5b942',.5,.55],['#34d399',.75,.3],['#ef4444',.42,.25],['#34d399',.3,.75],['#f5b942',.78,.72]].forEach(([cl,x,y],i)=>{g.fillStyle=cl+'55';g.strokeStyle=cl;g.lineWidth=3;g.beginPath();g.rect(x*W1-80,y*H1-50,160,100);g.fill();g.stroke();txt(g,['Gate 1','Darshan Hall','Goshala','Hall 2','Parking','Exit 2'][i],x*W1,y*H1,22,'#fff',600,'center')})}
+ else if(kind==='lidar'){header('LiDAR · Darshan Hall point cloud');for(let k=0;k<70;k++){const cx=80+r()*(W1-160),cy=90+r()*(H1-130);for(let i=0;i<30;i++){g.fillStyle=`hsla(${180+r()*40},90%,${55+r()*25}%,.9)`;g.fillRect(cx+(r()-.5)*24,cy+(r()-.5)*24,3,3)}}
+   g.strokeStyle='#f5b942';g.lineWidth=4;g.setLineDash([14,8]);g.strokeRect(220,120,580,380);g.setLineDash([]);g.fillStyle='#f5b942';g.fillRect(220,90,250,32);txt(g,'Zone A · 82% of safe limit',230,106,20,'#111',700)}
+ else if(kind==='occ'){header('Hall occupancy vs safe limit');['Darshan Hall','Hall 2','Queue Lane A','East Courtyard','Goshala','Prasad Counter'].forEach((h,i)=>{const v=[.86,.64,.92,.41,.33,.58][i];const y=80+i*78;txt(g,h,24,y+20,24,'#cfd9e2',500);g.fillStyle='#16273a';g.fillRect(260,y,700,40);g.fillStyle=v>.9?'#ef4444':v>.8?'#f5b942':'#34d399';g.fillRect(260,y,700*v,40);txt(g,Math.round(v*100)+'%',970,y+20,24,'#fff',700,'right')})}
+ else if(kind==='inc'){header('Incident queue · SOP workflow');[['#ef4444','Unattended object','Queue Lane A','Verify'],['#f5b942','Crowd above 80%','Darshan Hall','Hold entry'],['#ef4444','Fall detected','Staircase B','Dispatch'],['#5cc8e0','ALPR watchlist hit','Parking P1','Review'],['#34d399','Fire panel normal','All zones','Closed']].forEach(([cl,a,b,st],i)=>{const y=70+i*98;g.fillStyle='#0f2030';g.fillRect(18,y,W1-36,82);g.fillStyle=cl;g.fillRect(18,y,10,82);txt(g,a,48,y+28,28,'#eef3f7',600);txt(g,b,48,y+60,20,'#9aa8b6',500);g.fillStyle=cl+'33';rrect(g,W1-220,y+22,180,40,8);txt(g,st,W1-130,y+42,22,cl,700,'center')})}
+ else if(kind==='health'){header('Device health');[[230,'Cameras','#34d399',.97],[512,'Sensors','#5cc8e0',.95],[794,'Network','#a78bfa',.99]].forEach(([x,t,cl,v])=>{g.lineWidth=34;g.strokeStyle='#16273a';g.beginPath();g.arc(x,300,120,0,7);g.stroke();g.strokeStyle=cl;g.beginPath();g.arc(x,300,120,-Math.PI/2,-Math.PI/2+v*Math.PI*2);g.stroke();txt(g,Math.round(v*100)+'%',x,300,46,'#fff',700,'center');txt(g,t+' online',x,470,26,'#cfd9e2',500,'center')})}
+ g.restore()}
+ return c}
+
+// ---------- scene ----------
+const stage=document.getElementById('stage');
+const scene=new THREE.Scene();scene.background=new THREE.Color('#0b1016');
+let renderer;
+try{renderer=new THREE.WebGLRenderer({antialias:true});}catch(e){document.getElementById('fallback').textContent='This 3D view needs WebGL, which this browser has turned off. Try another browser or device.';throw e}
+maxAniso=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
+stage.prepend(renderer.domElement);
+const css=new CSS2DRenderer({element:document.getElementById('css')});
+document.getElementById('fallback').remove();
+
+scene.add(new THREE.HemisphereLight('#cfe0ff','#2a2f36',1.1));
+const sun=new THREE.DirectionalLight('#ffffff',1.6);sun.position.set(6,14,9);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);
+Object.assign(sun.shadow.camera,{left:-14,right:14,top:10,bottom:-10,near:1,far:40});sun.shadow.bias=-0.0004;scene.add(sun);
+const fill=new THREE.DirectionalLight('#b8c8ff',.5);fill.position.set(-8,6,10);scene.add(fill);
+[[-6.6,0],[-6.9,2.8],[-6.9,-2.8]].forEach(([x,z])=>{const l=new THREE.PointLight('#fff4e6',5,6,1.5);l.position.set(x,2.9,z);scene.add(l)});
+{const l=new THREE.PointLight('#e8f0ff',10,7,1.4);l.position.set(4.8,2.6,2.6);scene.add(l)}
+
+// floors
+{const [c,g]=cnv(256,256);g.fillStyle='#1f2934';g.fillRect(0,0,256,256);const r=rng(4);for(let i=0;i<5000;i++){g.fillStyle=`rgba(${r()>.5?255:0},${r()>.5?255:0},255,${r()*.04})`;g.fillRect(r()*256,r()*256,2,2)}
+ const m=new THREE.Mesh(new THREE.PlaneGeometry(10,10),new THREE.MeshStandardMaterial({map:tex(c,[6,6]),roughness:1}));m.rotation.x=-Math.PI/2;m.position.set(-5,0,0);m.receiveShadow=true;scene.add(m)}
+{const [c,g]=cnv(256,256);g.fillStyle='#b9c2cb';g.fillRect(0,0,256,256);g.fillStyle='#939da7';g.fillRect(0,0,256,5);g.fillRect(0,0,5,256);
+ const m=new THREE.Mesh(new THREE.PlaneGeometry(9.5,10),new THREE.MeshStandardMaterial({map:tex(c,[9.5/.6,10/.6]),roughness:.75}));m.rotation.x=-Math.PI/2;m.position.set(4.75,0.001,0);m.receiveShadow=true;scene.add(m)}
+{const [c,g]=cnv(256,256);g.fillStyle='#aab4be';g.fillRect(0,0,256,256);g.fillStyle='#7c8792';for(let y=24;y<240;y+=12)for(let x=24;x<240;x+=12){g.beginPath();g.arc(x,y,3.5,0,7);g.fill()}g.fillStyle='#939da7';g.fillRect(0,0,256,5);g.fillRect(0,0,5,256);
+ const m=new THREE.Mesh(new THREE.PlaneGeometry(6.6,1.2),new THREE.MeshStandardMaterial({map:tex(c,[11,2]),roughness:.75}));m.rotation.x=-Math.PI/2;m.position.set(4.8,0.003,1.2);m.receiveShadow=true;scene.add(m)}
+
+// walls + glass partition
+const wallM=new THREE.MeshStandardMaterial({color:'#36414d',roughness:.95});
+box(19.6,3.2,.12,wallM,-0.25,1.6,-5.06);box(.12,3.2,10.12,wallM,-10.06,1.6,0);box(.12,3.2,10.12,wallM,9.56,1.6,0);box(19.6,.12,.12,wallM,-0.25,.06,5.06);
+const glassM=new THREE.MeshStandardMaterial({color:'#9fc6e0',transparent:true,opacity:.14,roughness:.1,metalness:.1,depthWrite:false});
+const frameM=metal('#4b5663');
+[[-5,2.6],[3.6,5]].forEach(([a,b])=>{const len=b-a,mid=(a+b)/2;const gl=new THREE.Mesh(new THREE.BoxGeometry(.03,3.0,len),glassM);gl.position.set(0,1.5,mid);scene.add(gl);
+ box(.08,.06,len,frameM,0,3.0,mid);box(.08,.06,len,frameM,0,.03,mid);const n=Math.max(1,Math.round(len/1.25));for(let i=0;i<=n;i++)box(.06,3.0,.06,frameM,0,1.5,a+i*len/n)});
+box(.08,.1,1,frameM,0,2.2,3.1);
+
+// ---------- control room ----------
+const SW=1.213, SH=.682;
+const wallKinds=[['grid3',1],['lidar',2],['gis',3],['occ',4],['grid4',5],['grid2',6],['inc',7],['grid3',8],['health',9],['grid2',10]];
+box(.14,1.62,6.35,metal('#11161b'),-9.93,.85+SH,0);box(.5,.82,6.2,matte('#1a2027'),-9.75,.41,0);
+for(let row=0;row<2;row++)for(let col=0;col<5;col++){const k=wallKinds[row*5+col];const y=.88+SH/2+(1-row)*SH;const z=2*SW-col*SW;
+ box(.06,SH-.002,SW-.002,metal('#05070a'),-9.84,y,z);
+ const s=new THREE.Mesh(new THREE.PlaneGeometry(SW-.006,SH-.006),new THREE.MeshBasicMaterial({map:tex(screenCanvas(k[0],k[1])),toneMapped:false}));s.rotation.y=Math.PI/2;s.position.set(-9.805,y,z);scene.add(s)}
+{const glow=new THREE.PointLight('#6fa8ff',3,9,1.6);glow.position.set(-8.6,1.6,0);scene.add(glow)}
+function chair(parent,x,z,col='#2b3540'){const g=new THREE.Group();const m=matte(col);box(.5,.08,.5,m,0,.48,0,g);box(.07,.6,.46,m,.24,.82,0,g);box(.05,.4,.05,metal('#555e68'),0,.26,0,g);
+ const b=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,.03,16),metal('#3d454e'));b.position.y=.05;g.add(b);g.position.set(x,0,z);parent.add(g);return g}
+const monTex=['grid3','grid2','occ','grid4','inc','gis'].map((k,i)=>tex(screenCanvas(k,41+i,512,288)));
+function monitor(parent,x,y,z,ry,t){const g=new THREE.Group();box(.025,.335,.56,metal('#0a0d10'),0,0,0,g);const s=new THREE.Mesh(new THREE.PlaneGeometry(.53,.30),new THREE.MeshBasicMaterial({map:t,toneMapped:false}));s.rotation.y=Math.PI/2;s.position.x=.014;g.add(s);g.position.set(x,y,z);g.rotation.y=ry;parent.add(g)}
+function desk(x,z,ry,wid,k,tall=0){const g=new THREE.Group();const top=matte('#cfd5dc'),body=matte('#3a4552');
+ box(.8,.04,wid,top,0,.74+tall,0,g);box(.04,.7,wid,body,-.38,.37+tall,0,g);box(.78,.7,.04,body,0,.37+tall,wid/2-.02,g);box(.78,.7,.04,body,0,.37+tall,-wid/2+.02,g);
+ box(.02,.45,.02,metal('#2a3038'),-.3,.98+tall,0,g);box(.02,.02,.9,metal('#2a3038'),-.3,1.08+tall,0,g);
+ monitor(g,-.27,1.08+tall,.29,.18,monTex[k%6]);monitor(g,-.27,1.08+tall,-.29,-.18,monTex[(k+1)%6]);
+ box(.16,.02,.45,matte('#1d232a'),.12,.77+tall,0,g);
+ box(.45,.45,.2,matte('#1a2028'),-.05,.26+tall,wid/2-.2,g);box(.01,.3,.01,new THREE.MeshBasicMaterial({color:'#38bdf8'}),.18,.3+tall,wid/2-.2,g);
+ g.position.set(x,0,z);g.rotation.y=ry;scene.add(g);const ch=chair(g,.62,0);ch.position.y=tall;return g}
+[-32,-16,0,16,32].forEach((d,i)=>{const t=d*Math.PI/180;desk(-12.3+5.8*Math.cos(t),5.8*Math.sin(t),-t,1.55,i)});
+const platM=matte('#27313c');box(1.7,.3,8,platM,-3.75,.15,0);box(.32,.15,8,platM,-4.76,.075,0);
+{const g=desk(-4.2,0,0,2.4,2,.3);box(.3,.06,.22,matte('#11161b'),.05,1.06,-.75,g);box(.22,.08,.2,matte('#11161b'),.05,1.06,.75,g)}
+box(2.5,.6,8,platM,-1.65,.3,0);box(.3,.3,8,platM,-3.05,.45,0);
+box(.35,.05,7.2,matte('#cfd5dc'),-2.55,1.35,0);box(.06,.75,7.2,matte('#3a4552'),-2.68,.98,0);
+for(const x of [-1.95,-1.05])for(let i=0;i<8;i++){const g=new THREE.Group();g.position.y=.6;scene.add(g);chair(g,x,-3.15+i*.9,'#3b2f2a')}
+
+// ---------- server room ----------
+const DEV={}; const RACK_OBJ={}; const hitboxes=[]; const devMeshes=[]; const doors=[];
+const blankC=blankCanvas(), doorC=doorCanvas();
+function buildRack(rack){
+  const cx=RACK_X(rack.id);const g=new THREE.Group();g.position.set(cx,0,0);scene.add(g);
+  const frame=metal('#2a323b'),side=metal('#20272f');
+  box(.02,1.98,1.2,side,-.39,1.01,0,g);box(.02,1.98,1.2,side,.39,1.01,0,g);
+  box(.8,.04,1.2,frame,0,2.0,0,g);box(.8,.07,1.2,frame,0,.035,0,g);
+  [-.25,.25].forEach(x=>{box(.02,1.9,.02,metal('#3b444e'),x,1.02,.52,g);box(.02,1.9,.02,metal('#3b444e'),x,1.02,-.4,g)});
+  [-1,1].forEach(sg=>box(.135,1.93,.02,metal('#12171c'),sg*.31,1.035,.535,g));
+  box(.04,1.7,.05,metal('#0f1317'),-.33,1.0,-.48,g);box(.04,1.7,.05,metal('#0f1317'),.33,1.0,-.48,g);
+  const doorMat=new THREE.MeshStandardMaterial({map:tex(doorC,[3,7]),transparent:true,side:THREE.DoubleSide,roughness:.6,metalness:.4});
+  const rear=new THREE.Mesh(new THREE.PlaneGeometry(.76,1.92),doorMat);rear.position.set(0,1.02,-.6);rear.rotation.y=Math.PI;g.add(rear);
+  const front=new THREE.Mesh(new THREE.PlaneGeometry(.76,1.92),doorMat);front.position.set(0,1.02,.61);front.visible=false;g.add(front);doors.push(front);
+  const occ=new Array(44).fill(false);
+  rack.devices.forEach(d=>{for(let i=0;i<d.h;i++)occ[d.u+i]=true;
+    const dep=DEPTH[d.kind];const body=metal('#20262d');body.emissive=new THREE.Color(CAT[d.cat].color);body.emissiveIntensity=0;
+    const fm=new THREE.MeshStandardMaterial({map:frontTexture(d),roughness:.55,metalness:.2,emissive:'#ffffff'});fm.emissiveMap=fm.map;fm.emissiveIntensity=.28;
+    const m=new THREE.Mesh(new THREE.BoxGeometry(.4826,d.h*U-.002,dep),[body,body,body,body,fm,body]);
+    m.position.set(0,.07+(d.u-1)*U+d.h*U/2,.53-dep/2);m.castShadow=true;m.userData.dev=d.id;g.add(m);devMeshes.push(m);DEV[d.id]={d,rack,m,body,fm}});
+  let s=null;for(let u=1;u<=43;u++){if(u<=42&&!occ[u]){if(s===null)s=u}else if(s!==null){const n=u-s;const m=new THREE.Mesh(new THREE.BoxGeometry(.4826,n*U,.01),new THREE.MeshStandardMaterial({map:tex(blankC,[1,n]),roughness:.8,metalness:.3}));m.position.set(0,.07+(s-1)*U+n*U/2,.53);g.add(m);s=null}}
+  if(!rack.reserved)box(.76,.015,.01,new THREE.MeshBasicMaterial({color:RACK_COLOR[rack.id]}),0,1.97,.605,g);
+  const hb=new THREE.Mesh(new THREE.BoxGeometry(.8,2.02,1.2),new THREE.MeshBasicMaterial({visible:false}));hb.position.set(0,1.01,0);hb.userData.rack=rack.id;g.add(hb);hitboxes.push(hb);
+  RACK_OBJ[rack.id]=g;
+}
+RACKS.forEach(buildRack);
+const outline=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(.84,2.06,1.24)),new THREE.LineBasicMaterial({color:'#f29b38'}));outline.visible=false;scene.add(outline);
+{const lm=metal('#8a939c');box(6.6,.04,.03,lm,4.8,2.32,0);box(6.6,.04,.03,lm,4.8,2.32,.45);for(let x=1.6;x<=8.0;x+=.3)box(.025,.02,.45,lm,x,2.32,.225);for(let x=2;x<=7.6;x+=1.6)box(.02,.3,.02,lm,x,2.17,.225)}
+function cabTexture(t1,t2,col,lcd){const [c,g]=cnv(256,600);g.fillStyle='#e3e7eb';g.fillRect(0,0,256,600);g.fillStyle='#c9cfd5';for(let y=330;y<580;y+=14)g.fillRect(30,y,196,6);
+ if(lcd){g.fillStyle='#0d1b28';g.fillRect(40,70,176,110);g.fillStyle='#34d399';g.fillRect(52,86,80,10);g.fillRect(52,106,120,10);g.fillRect(52,126,60,10)}
+ g.fillStyle=col;g.fillRect(0,0,256,26);txt(g,t1,128,230,38,'#1b2430',700,'center');txt(g,t2,128,272,24,'#5b6773',500,'center');return tex(c)}
+{let ux=1.0;const sm=c=>metal(c);for(let i=1;i<=4;i++){const u=new THREE.Mesh(new THREE.BoxGeometry(.6,1.9,.85),[sm('#c9cfd5'),sm('#c9cfd5'),sm('#c9cfd5'),sm('#c9cfd5'),new THREE.MeshStandardMaterial({map:cabTexture('UPS-'+i,'40 kVA · 3-phase','#3ccf91',true),roughness:.6}),sm('#c9cfd5')]);
+ u.position.set(ux+.3,.95,-4.5);u.castShadow=true;scene.add(u);ux+=.65;
+ const b=new THREE.Mesh(new THREE.BoxGeometry(.85,1.9,.85),[sm('#9aa3ac'),sm('#9aa3ac'),sm('#9aa3ac'),sm('#9aa3ac'),new THREE.MeshStandardMaterial({map:cabTexture('BATT-'+i,'1 hr backup','#ffd166',false),roughness:.6}),sm('#9aa3ac')]);
+ b.position.set(ux+.425,.95,-4.5);b.castShadow=true;scene.add(b);ux+=.9}}
+[-1.4,1.8].forEach((z,i)=>{const p=new THREE.Mesh(new THREE.BoxGeometry(.85,1.95,.85),[new THREE.MeshStandardMaterial({map:cabTexture('PAC-'+(i+1),i?'Standby (N+1)':'Duty','#5cc8e0',true),roughness:.6}),metal('#d8dde2'),metal('#d8dde2'),metal('#d8dde2'),metal('#d8dde2'),metal('#d8dde2')]);
+ p.rotation.y=Math.PI;p.position.set(9.05,.975,z);p.castShadow=true;scene.add(p)});
+box(.04,.14,.09,matte('#11161b'),.07,1.2,2.45);
+
+// ---------- labels ----------
+label('Unified Command &amp; Control Room','zone',new THREE.Vector3(-5.5,3.6,-4.6));
+label('Server Room · Mini Data Centre','zone',new THREE.Vector3(4.8,3.6,-4.6));
+label('Video Wall · 5 × 2<small>55″ ultra-narrow bezel LED + controller</small>','',new THREE.Vector3(-9.8,2.7,2.6));
+label('Operator Consoles × 5<small>i9 workstation · dual 24″ monitors</small>','',new THREE.Vector3(-6.4,1.95,3.6));
+label('Supervisor Console<small>IP PA console · PTZ joystick</small>','',new THREE.Vector3(-4.2,2.1,-2.4));
+label('Gallery Seating<small>16 seats · raised tier</small>','',new THREE.Vector3(-1.5,2.25,3.4));
+label('UPS 40 kVA × 4<small>with battery banks · 1 hr</small>','',new THREE.Vector3(3.6,2.4,-4.4));
+label('PAC 20 TR · N+1<small>customer scope</small>','',new THREE.Vector3(9.0,2.4,.2));
+label('Cold aisle','floor',new THREE.Vector3(4.8,.02,2.25));
+RACKS.forEach(r=>label(r.id,'rack',new THREE.Vector3(RACK_X(r.id),2.14,.55),`--c:${RACK_COLOR[r.id]}`));
+
+// ---------- camera & controls ----------
+const camera=new THREE.PerspectiveCamera(36,1,.05,120);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;controls.dampingFactor=.08;controls.maxPolarAngle=Math.PI*.49;controls.minDistance=.8;controls.maxDistance=40;
+const VIEWS={
+  overview:{p:[8.5,15.5,17.5],t:[-0.6,0,-0.4],wide:true},
+  control:{p:[-2.4,2.2,3.6],t:[-9.6,1.15,-0.6]},
+  server:{p:[1.2,3.6,6.4],t:[5.2,0.9,-1.2],wide:true},
+  racks:{p:[5.7,1.45,3.9],t:[3.7,1.0,0]},
+};
+let fly=null;
+function flyTo(p,t,dur=900){const from={p:camera.position.clone(),t:controls.target.clone()};const to={p:new THREE.Vector3(...p),t:new THREE.Vector3(...t)};
+  if(reduceMotion){camera.position.copy(to.p);controls.target.copy(to.t);return}fly={from,to,start:performance.now(),dur}}
+function fitP(v){const a=camera.aspect||1.6;const f=(v.wide?Math.min(2.4,Math.max(1,1.78/a)):Math.min(1.8,Math.max(1,1.5/a)));return v.p.map((c,i)=>v.t[i]+(c-v.t[i])*f)}
+function setView(name){const v=VIEWS[name];flyTo(fitP(v),v.t);document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===name)))}
+controls.target.set(...VIEWS.overview.t);
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+const clearViewPressed=()=>document.querySelectorAll('[data-view]').forEach(b=>b.setAttribute('aria-pressed','false'));
+
+function resize(){const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h);css.setSize(w,h);camera.aspect=w/h;camera.fov=w/h<1?55:36;camera.updateProjectionMatrix()}
+new ResizeObserver(resize).observe(stage);resize();camera.position.set(...fitP(VIEWS.overview));
+
+// ---------- selection ----------
+let highlighted=new Set(), selectedRack=null, selectedItem=null;
+function setHighlight(ids){highlighted.forEach(id=>{const o=DEV[id];o.body.emissiveIntensity=0;o.fm.emissiveIntensity=.28});highlighted=new Set(ids)}
+function selectRack(id,{fly:doFly=true,openTab=true}={}){
+  selectedRack=id;const g=RACK_OBJ[id];outline.position.set(g.position.x,1.01,0);outline.visible=true;
+  if(doFly){const x=g.position.x;flyTo([x+0.9,1.5,3.1],[x,1.0,0.2]);clearViewPressed()}
+  renderElevation(id);if(openTab)showTab('rack');
+}
+function selectItem(i){
+  selectedItem=i;const it=ITEMS[i];
+  document.querySelectorAll('tr.item').forEach(tr=>tr.setAttribute('aria-selected',String(+tr.dataset.i===i)));
+  if(it.racks){setHighlight([]);outline.visible=false;setView('server');return}
+  setHighlight(it.ids);
+  const racks=[...new Set(it.ids.map(id=>DEV[id].rack.id))];
+  if(racks.length===1){selectRack(racks[0],{openTab:false})}
+  else{const xs=racks.map(RACK_X);const mid=(Math.min(...xs)+Math.max(...xs))/2;flyTo([mid+0.9,1.6,4.3],[mid,1.0,0.2]);clearViewPressed();selectedRack=racks[0];renderElevation(racks[0]);const g=RACK_OBJ[racks[0]];outline.position.set(g.position.x,1.01,0);outline.visible=true}
+}
+
+// ---------- panel ----------
+function showTab(which){const eq=which==='eq';document.getElementById('tabEq').setAttribute('aria-selected',String(eq));document.getElementById('tabRack').setAttribute('aria-selected',String(!eq));
+  document.getElementById('paneEq').classList.toggle('on',eq);document.getElementById('paneRack').classList.toggle('on',!eq)}
+document.getElementById('tabEq').addEventListener('click',()=>showTab('eq'));
+document.getElementById('tabRack').addEventListener('click',()=>{if(!selectedRack)selectRack('R1',{fly:false});showTab('rack')});
+
+const loc=d=>`${d.rack.id} · U${d.d.u}${d.d.h>1?'–'+(d.d.u+d.d.h-1):''}`;
+const usedU=RACKS.reduce((a,r)=>a+r.devices.reduce((b,d)=>b+d.h,0),0);
+document.getElementById('stats').innerHTML=
+  `<div class="stat"><b>18</b><span>servers, incl. 4 GPU</span></div>`+
+  `<div class="stat"><b>${usedU} U</b><span>used of ${8*42} U in 8 racks</span></div>`+
+  `<div class="stat"><b>2,988 TB</b><span>raw, 166 × 18 TB</span></div>`;
+document.getElementById('items').innerHTML=ITEMS.map((it,i)=>{
+  const first=it.ids[0]?DEV[it.ids[0]].d.cat:null;const c=first?CAT[first].color:'#7b8794';
+  const chips=it.racks?it.racks.map(r=>`<span class="chip">${r}</span>`).join(''):it.ids.map(id=>`<span class="chip">${loc(DEV[id])}</span>`).join('');
+  return `<tr class="item" tabindex="0" data-i="${i}" aria-selected="false"><td class="n">${it.sl}</td><td><span class="dot" style="--c:${c}"></span>${it.purpose}<div class="chips">${chips}</div></td><td class="q">${it.qty}</td></tr>`}).join('');
+document.querySelectorAll('tr.item').forEach(tr=>{const go=()=>selectItem(+tr.dataset.i);tr.addEventListener('click',go);tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go()}})});
+
+document.getElementById('rackpick').innerHTML=RACKS.map(r=>`<button class="btn" data-rack="${r.id}" aria-pressed="false">${r.id}</button>`).join('');
+document.querySelectorAll('[data-rack]').forEach(b=>b.addEventListener('click',()=>selectRack(b.dataset.rack)));
+function renderElevation(id){
+  const r=RACK_BY_ID[id];
+  document.querySelectorAll('[data-rack]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.rack===id)));
+  const used=r.devices.reduce((a,d)=>a+d.h,0);
+  document.getElementById('rhead').innerHTML=`<h3 style="color:${RACK_COLOR[id]}">${r.id} · ${r.name}</h3><p>42U · 800 W × 1200 D mm · ${used} U used, ${42-used} U free · front view, U1 at the bottom</p>`;
+  let h='';for(let u=42;u>=1;u--)h+=`<div class="u" style="grid-row:${43-u}">${u}</div><div class="slot" style="grid-row:${43-u}"></div>`;
+  if(r.reserved)h+=`<div class="empty">Reserved · blanking panels</div>`;
+  r.devices.forEach(d=>{const top=43-(d.u+d.h-1);const on=highlighted.has(d.id)?' on':'';
+    h+=`<button class="blk${d.cat==='pas'?' pas':''}${on}" style="grid-row:${top} / span ${d.h};--c:${CAT[d.cat].color}" data-dev="${d.id}">${d.label}${d.h>1||d.cat!=='pas'?`<span>${d.tag}</span>`:''}</button>`});
+  const el=document.getElementById('elev');el.innerHTML=h;
+  el.querySelectorAll('.blk').forEach(b=>b.addEventListener('click',()=>{setHighlight([b.dataset.dev]);renderElevation(id)}));
+}
+document.getElementById('legend').insertAdjacentHTML('beforeend',Object.values(CAT).map(c=>`<div class="sw"><i style="--c:${c.color}"></i>${c.name}</div>`).join(''));
+document.getElementById('optLabels').addEventListener('change',e=>document.getElementById('app').classList.toggle('hide-labels',!e.target.checked));
+document.getElementById('optDoors').addEventListener('change',e=>doors.forEach(d=>d.visible=e.target.checked));
+
+// ---------- picking ----------
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2(), tip=document.getElementById('tip');
+let pointer=null, downAt=null;
+function pick(ev){const r=renderer.domElement.getBoundingClientRect();ndc.set(((ev.clientX-r.left)/r.width)*2-1,-((ev.clientY-r.top)/r.height)*2+1);ray.setFromCamera(ndc,camera);
+  const d=ray.intersectObjects(devMeshes,false)[0];if(d)return{dev:d.object.userData.dev};const h=ray.intersectObjects(hitboxes,false)[0];if(h)return{rack:h.object.userData.rack};return null}
+renderer.domElement.addEventListener('pointermove',e=>{pointer=e});
+renderer.domElement.addEventListener('pointerleave',()=>{pointer=null;tip.style.display='none'});
+renderer.domElement.addEventListener('pointerdown',e=>{downAt=[e.clientX,e.clientY]});
+renderer.domElement.addEventListener('pointerup',e=>{if(!downAt||Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1])>5)return;const p=pick(e);
+  if(p?.dev){const o=DEV[p.dev];setHighlight([p.dev]);selectRack(o.rack.id)}else if(p?.rack){setHighlight([]);selectRack(p.rack)}});
+controls.addEventListener('start',()=>{fly=null});
+function updateTip(){if(!pointer){return}const p=pick(pointer);const app=document.getElementById('app').getBoundingClientRect();
+  if(!p){tip.style.display='none';renderer.domElement.style.cursor='';return}
+  renderer.domElement.style.cursor='pointer';
+  if(p.dev){const o=DEV[p.dev];tip.style.setProperty('--c',CAT[o.d.cat].color);tip.innerHTML=`<b>${o.d.label}</b><span>${loc(o)} · ${o.d.tag}</span>`}
+  else{const r=RACK_BY_ID[p.rack];tip.style.setProperty('--c',RACK_COLOR[r.id]);tip.innerHTML=`<b>${r.id} · ${r.name}</b><span>click to see its layout</span>`}
+  tip.style.display='block';const x=Math.min(pointer.clientX-app.left+14,app.width-300);tip.style.left=x+'px';tip.style.top=(pointer.clientY-app.top+14)+'px'}
+
+// ---------- loop ----------
+const ease=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+let frame=0;
+function tick(now){
+  if(fly){const k=Math.min(1,(now-fly.start)/fly.dur),e=ease(k);camera.position.lerpVectors(fly.from.p,fly.to.p,e);controls.target.lerpVectors(fly.from.t,fly.to.t,e);if(k>=1)fly=null}
+  controls.update();
+  const pulse=reduceMotion?.8:.55+.45*Math.sin(now/260);
+  highlighted.forEach(id=>{const o=DEV[id];o.body.emissiveIntensity=.9*pulse;o.fm.emissiveIntensity=.28+.5*pulse});
+  if((frame++&3)===0)updateTip();
+  renderer.render(scene,camera);css.render(scene,camera);
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+window.__ready=true;
+</script>
+</body>
+</html>
